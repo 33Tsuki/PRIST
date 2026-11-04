@@ -1,0 +1,187 @@
+name: Release Split APKs
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          full_version="$(grep '^version:' pubspec.yaml | head -n 1 | awk '{print $2}')"
+          app_version="${full_version%%+*}"
+          ci_build_number="${GITHUB_RUN_NUMBER}"
+          short_sha="${GITHUB_SHA::7}"
+          release_tag="v${app_version}-build.${ci_build_number}-main-${short_sha}"
+          release_title="Surveyor App ${release_tag}"
+
+          echo "full_version=${full_version}" >> "$GITHUB_OUTPUT"
+          echo "app_version=${app_version}" >> "$GITHUB_OUTPUT"
+          echo "ci_build_number=${ci_build_number}" >> "$GITHUB_OUTPUT"
+          echo "release_tag=${release_tag}" >> "$GITHUB_OUTPUT"
+          echo "release_title=${release_title}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate signing secrets
+        env:
+          DOTENV_FILE: ${{ secrets.DOTENV_FILE }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+
+          for secret_name in \
+            DOTENV_FILE \
+            ANDROID_KEYSTORE_BASE64 \
+            ANDROID_KEYSTORE_PASSWORD \
+            ANDROID_KEY_ALIAS \
+            ANDROID_KEY_PASSWORD
+          do
+            if [ -z "${!secret_name:-}" ]; then
+              echo "::error::Missing required GitHub secret: ${secret_name}"
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Prepare dotenv file
+        env:
+          DOTENV_FILE: ${{ secrets.DOTENV_FILE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$DOTENV_FILE" > .env
+
+      - name: Prepare Android signing files
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+
+          {
+            echo "storeFile=app/upload-keystore.jks"
+            echo "storePassword=$ANDROID_KEYSTORE_PASSWORD"
+            echo "keyAlias=$ANDROID_KEY_ALIAS"
+            echo "keyPassword=$ANDROID_KEY_PASSWORD"
+          } > android/key.properties
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Build split release APKs
+        run: flutter build apk --release --build-number "${{ steps.meta.outputs.ci_build_number }}" --split-per-abi --target-platform android-arm,android-arm64
+
+      - name: Build universal release APK
+        run: flutter build apk --release --build-number "${{ steps.meta.outputs.ci_build_number }}" --target-platform android-arm,android-arm64
+
+      - name: Prepare release assets
+        id: assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          ls -la build/app/outputs/flutter-apk/
+
+          for apk_name in \
+            app-armeabi-v7a-release.apk \
+            app-arm64-v8a-release.apk \
+            app-release.apk
+          do
+            if [ ! -f "build/app/outputs/flutter-apk/${apk_name}" ]; then
+              echo "::error::Expected Flutter APK output not found: ${apk_name}"
+              exit 1
+            fi
+          done
+
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk \
+            "dist/surveyor_app-${{ steps.meta.outputs.release_tag }}-armeabi-v7a.apk"
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
+            "dist/surveyor_app-${{ steps.meta.outputs.release_tag }}-arm64-v8a.apk"
+          cp build/app/outputs/flutter-apk/app-release.apk \
+            "dist/surveyor_app-${{ steps.meta.outputs.release_tag }}-universal.apk"
+
+      - name: Check for existing release
+        id: release_state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.meta.outputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.meta.outputs.release_tag }}
+          RELEASE_TITLE: ${{ steps.meta.outputs.release_title }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" --title "$RELEASE_TITLE"
+            gh release upload "$RELEASE_TAG" dist/*.apk --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/*.apk \
+              --target "$GITHUB_SHA" \
+              --title "$RELEASE_TITLE" \
+              --generate-notes
+          fi
+
+      - name: Delete incomplete release on failure
+        if: ${{ failure() && steps.release_state.outputs.exists == 'false' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.meta.outputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release delete "$RELEASE_TAG" --yes
+          fi

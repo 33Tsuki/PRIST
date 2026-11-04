@@ -1,0 +1,29 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies and build
+        run: npm ci && npm run build
+        env:
+          VITE_API_BASE_URL: /cpitripura/api
+
+      - name: Deploy to server
+        run: |
+          rm -rf /var/www/tripura-cpi/*
+          cp -r dist/* /var/www/tripura-cpi/

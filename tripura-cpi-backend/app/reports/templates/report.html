@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+    @page {
+        size: A4 landscape;
+        margin: 1.6cm 1.2cm 1.8cm 1.2cm;
+        @bottom-center {
+            content: "Page " counter(page) " of " counter(pages);
+            font-size: 8pt;
+            color: #666;
+        }
+        @bottom-left {
+            content: "Tripura CPI Survey System";
+            font-size: 8pt;
+            color: #666;
+        }
+    }
+    body {
+        font-family: "DejaVu Sans", sans-serif;
+        font-size: 9pt;
+        color: #1a1a1a;
+    }
+    header {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        border-bottom: 2px solid #2c5f2d;
+        padding-bottom: 10px;
+        margin-bottom: 12px;
+    }
+    header img { height: 52px; }
+    .org { font-size: 8.5pt; color: #444; }
+    h1 { font-size: 15pt; margin: 2px 0; color: #2c5f2d; }
+    .description { font-size: 9pt; color: #444; margin: 0; }
+    table.meta {
+        border-collapse: collapse;
+        margin-bottom: 14px;
+        font-size: 8.5pt;
+    }
+    table.meta td { padding: 1.5px 18px 1.5px 0; }
+    table.meta td.label { color: #666; }
+    table.meta td.value { font-weight: bold; }
+    h2 { font-size: 11pt; color: #2c5f2d; margin: 14px 0 6px; }
+    table.data {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 8pt;
+    }
+    table.data th {
+        background: #2c5f2d;
+        color: #fff;
+        padding: 4px 6px;
+        text-align: left;
+        font-weight: bold;
+    }
+    table.data td {
+        border-bottom: 0.5pt solid #ccc;
+        padding: 3px 6px;
+    }
+    table.data tr { break-inside: avoid; }
+    table.data tr:nth-child(even) td { background: #f4f7f4; }
+    thead { display: table-header-group; }  /* repeat header on every page */
+    .empty { color: #888; font-style: italic; margin: 8px 0; }
+</style>
+</head>
+<body>
+<header>
+    {% if logo_uri %}<img src="{{ logo_uri }}" alt="logo">{% endif %}
+    <div>
+        <div class="org">Government of Tripura &mdash; Consumer Price Index Survey</div>
+        <h1>{{ title }}</h1>
+        {% if description %}<p class="description">{{ description }}</p>{% endif %}
+    </div>
+</header>
+
+<table class="meta">
+    {% for label, value in meta %}
+    <tr><td class="label">{{ label }}</td><td class="value">{{ value }}</td></tr>
+    {% endfor %}
+</table>
+
+{% for section in sections %}
+    {% if section.heading %}<h2>{{ section.heading }}</h2>{% endif %}
+    {% if section.rows %}
+    <table class="data">
+        <thead>
+            <tr>{% for label in section.labels %}<th>{{ label }}</th>{% endfor %}</tr>
+        </thead>
+        <tbody>
+            {% for row in section.rows %}
+            <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">No data for the selected filters.</p>
+    {% endif %}
+{% endfor %}
+</body>
+</html>

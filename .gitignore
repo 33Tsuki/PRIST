@@ -1,0 +1,41 @@
+# Local secrets and configuration
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/.venv/
+**/venv/
+**/*.egg-info/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+
+# JavaScript / TypeScript
+**/node_modules/
+**/dist/
+**/dist-ssr/
+
+# Flutter / Dart
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/build/
+
+# IDE and operating system files
+**/.idea/
+**/.vscode/
+**/.DS_Store
+**/Thumbs.db
+
+# Runtime output and local data
+**/logs/
+**/generated_reports/
+*.log
+*.dump
+*.sql.gz
+*.xlsx
+*.xlsx#

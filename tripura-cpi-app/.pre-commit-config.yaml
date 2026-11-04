@@ -1,0 +1,23 @@
+# Pre-commit hooks configuration
+# See https://pre-commit.com for more information
+# To install: pip install pre-commit && pre-commit install
+
+repos:
+  - repo: local
+    hooks:
+      - id: dart-format
+        name: Dart Format
+        entry: sh -c 'dart format "$@"' --
+        language: system
+        types: [dart]
+        pass_filenames: true
+        always_run: false
+        stages: [pre-commit]
+
+      - id: flutter-analyze
+        name: Flutter Analyze
+        entry: sh -c 'flutter analyze'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]

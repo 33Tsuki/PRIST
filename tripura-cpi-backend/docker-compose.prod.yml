@@ -1,0 +1,17 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tripura-cpi-backend:latest
+    container_name: tripura-cpi-backend
+    env_file:
+      - /etc/api.env
+    environment:
+      - REPORTS_DIR=/app/generated_reports
+      - LOG_DIR=/app/logs
+    network_mode: host
+    volumes:
+      - ${LOGS_HOST_DIR:-/var/lib/tripura-cpi-backend/logs}:/app/logs
+      - ${REPORTS_HOST_DIR:-/var/lib/tripura-cpi-backend/generated_reports}:/app/generated_reports
+    restart: unless-stopped
