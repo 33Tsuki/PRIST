@@ -176,5 +176,5 @@ base64 your-release-key.jks | tr -d '\n'
 - OTP login skips real verification — integrate SMS gateway for production
 
 ---
-**Developed for**: Dept. of Statistics & Economics, Govt. of Tripura  
+**Developed for**: Dept. of Statistics & Economics, Govt. of Tripura
 **Version**: 0.1.0
